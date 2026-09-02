@@ -22,6 +22,7 @@ $common = @(
     '--vendor', 'Dai2010',
     '--description', 'Java desktop roll-call tool',
     '--license-file', (Join-Path $projectRoot 'LICENSE'),
+    '--icon', (Join-Path $projectRoot 'src\main\resources\icons\rollcall-icon.ico'),
     '--win-menu',
     '--win-shortcut'
 )

@@ -43,6 +43,8 @@ import java.awt.GridLayout;
 import java.awt.Insets;
 import java.awt.event.ActionEvent;
 import java.io.IOException;
+import java.io.InputStream;
+import javax.imageio.ImageIO;
 import java.net.URI;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -77,6 +79,7 @@ public final class MainFrame extends javax.swing.JFrame {
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setMinimumSize(new java.awt.Dimension(780, 560));
         setSize(1000, 720);
+        loadWindowIcon();
         setLocationRelativeTo(null);
 
         this.drawPanel = new DrawPanel(snapshot);
@@ -86,6 +89,16 @@ public final class MainFrame extends javax.swing.JFrame {
         tabs.addTab("名单管理", listsPanel);
         tabs.addTab("关于与帮助", new AboutPanel());
         add(tabs);
+    }
+
+    private void loadWindowIcon() {
+        try (InputStream input = MainFrame.class.getResourceAsStream("/icons/rollcall-icon.png")) {
+            if (input != null) {
+                setIconImage(ImageIO.read(input));
+            }
+        } catch (IOException ignored) {
+            // The application remains usable when an optional icon resource is unavailable.
+        }
     }
 
     private void saveAndRefresh() {
