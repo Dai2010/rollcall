@@ -3,6 +3,14 @@ $ErrorActionPreference = 'Stop'
 $projectRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $jar = Join-Path $projectRoot 'target\rollcall.jar'
 $output = Join-Path $PSScriptRoot 'dist'
+$version = $env:GITHUB_REF_NAME
+if ([string]::IsNullOrWhiteSpace($version)) {
+    $version = '1.0.0'
+}
+$version = $version -replace '^v', ''
+if ($version -notmatch '^\d+\.\d+\.\d+$') {
+    $version = '1.0.0'
+}
 
 if (-not (Test-Path $jar)) {
     throw "Executable JAR not found: $jar"
@@ -18,7 +26,7 @@ $common = @(
     '--main-jar', (Split-Path -Leaf $jar),
     '--main-class', 'com.dai2010.rollcall.Main',
     '--name', 'RollCall',
-    '--app-version', '1.0.0',
+    '--app-version', $version,
     '--vendor', 'Dai2010',
     '--description', 'Java desktop roll-call tool',
     '--license-file', (Join-Path $projectRoot 'LICENSE'),
