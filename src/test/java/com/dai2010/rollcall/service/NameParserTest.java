@@ -25,7 +25,7 @@ class NameParserTest {
     void assignsIdsToTextEntriesAndKeepsExistingIds() {
         List<Person> people = parser.parseText("7,张三\n李四\n9,王五\n9,赵六");
 
-        assertEquals(List.of(7, 1, 9, 2), people.stream().map(Person::getId).toList());
+        assertEquals(List.of(7, 8, 9, 10), people.stream().map(Person::getId).toList());
         assertEquals(List.of("张三", "李四", "王五", "赵六"), people.stream().map(Person::getName).toList());
     }
 

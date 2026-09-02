@@ -70,7 +70,7 @@ public final class NameParser {
             }
             entries.addAll(namesWithoutIds(line));
         }
-        return entries;
+        return normalize(entries);
     }
 
     private List<Person> parseJson(JsonElement element) {
