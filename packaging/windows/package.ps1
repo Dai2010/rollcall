@@ -5,11 +5,11 @@ $jar = Join-Path $projectRoot 'target\rollcall.jar'
 $output = Join-Path $PSScriptRoot 'dist'
 $version = $env:GITHUB_REF_NAME
 if ([string]::IsNullOrWhiteSpace($version)) {
-    $version = '1.0.0'
+    $version = '0.0.1'
 }
 $version = $version -replace '^v', ''
 if ($version -notmatch '^\d+\.\d+\.\d+$') {
-    $version = '1.0.0'
+    $version = '0.0.1'
 }
 
 if (-not (Test-Path $jar)) {

@@ -6,7 +6,7 @@
 
     <groupId>com.dai2010</groupId>
     <artifactId>rollcall</artifactId>
-    <version>1.0.0</version>
+    <version>0.0.1</version>
     <name>RollCall</name>
     <description>Java desktop roll-call tool with list management and random drawing.</description>
     <url>https://github.com/Dai2010/rollcall</url>
