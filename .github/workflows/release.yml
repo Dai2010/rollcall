@@ -1,0 +1,44 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag, for example v1.0.0'
+        required: true
+        type: string
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+      - name: Build executable JAR
+        shell: pwsh
+        run: mvn --batch-mode --no-transfer-progress package -DskipTests
+      - name: Package EXE and MSI
+        shell: pwsh
+        run: ./packaging/windows/package.ps1
+      - name: Upload Windows packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: rollcall-windows
+          path: packaging/windows/dist/*
+      - name: Create GitHub release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: packaging/windows/dist/*
