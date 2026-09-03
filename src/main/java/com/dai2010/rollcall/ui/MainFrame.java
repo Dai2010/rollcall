@@ -37,27 +37,45 @@ import java.awt.Color;
 import java.awt.Desktop;
 import java.awt.FlowLayout;
 import java.awt.Font;
+import java.awt.Frame;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.GridLayout;
 import java.awt.Insets;
+import java.awt.Point;
+import java.awt.Rectangle;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
 import java.awt.event.ActionEvent;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
+import java.awt.event.WindowEvent;
 import java.io.IOException;
 import java.io.InputStream;
 import javax.imageio.ImageIO;
 import java.net.URI;
 import java.nio.file.Path;
-import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
+import java.awt.geom.RoundRectangle2D;
 
 /** Main application window and its three functional tabs. */
 public final class MainFrame extends javax.swing.JFrame {
+    private static final Color APP_BACKGROUND = new Color(235, 245, 248);
+    private static final Color SURFACE_BACKGROUND = new Color(255, 255, 255);
+    private static final Color TEXT_COLOR = new Color(28, 55, 69);
+    private static final Color MUTED_TEXT_COLOR = new Color(83, 111, 124);
+    private static final Color CONTROL_BORDER = new Color(164, 193, 205);
+    private static final Color SELECTION_BACKGROUND = new Color(193, 228, 241);
+    private static final int WINDOW_RADIUS = 24;
+
     private final NameListRepository repository;
     private final NameListRepository.Snapshot snapshot;
     private final ListsPanel listsPanel;
     private final DrawPanel drawPanel;
+    private Rectangle restoredBounds;
+    private boolean maximized;
 
     public MainFrame() {
         this(new NameListRepository());
@@ -69,26 +87,152 @@ public final class MainFrame extends javax.swing.JFrame {
         NameListRepository.Snapshot loaded;
         try {
             loaded = repository.load();
-        } catch (IOException error) {
+        } catch (IOException | RuntimeException error) {
             loaded = new NameListRepository.Snapshot();
             SwingUtilities.invokeLater(() -> showError("读取名单文件失败：" + error.getMessage()));
         }
         this.snapshot = loaded;
         snapshot.sanitize();
 
+        setUndecorated(true);
         setDefaultCloseOperation(EXIT_ON_CLOSE);
         setMinimumSize(new java.awt.Dimension(780, 560));
         setSize(1000, 720);
+        setBackground(APP_BACKGROUND);
         loadWindowIcon();
         setLocationRelativeTo(null);
 
         this.drawPanel = new DrawPanel(snapshot);
         this.listsPanel = new ListsPanel(snapshot, this::saveAndRefresh);
         JTabbedPane tabs = new JTabbedPane();
+        tabs.setOpaque(false);
+        tabs.setBackground(APP_BACKGROUND);
+        tabs.setForeground(TEXT_COLOR);
+        tabs.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
         tabs.addTab("抽人与分组", drawPanel);
         tabs.addTab("名单管理", listsPanel);
         tabs.addTab("关于与帮助", new AboutPanel());
-        add(tabs);
+        RoundedPanel shell = new RoundedPanel(WINDOW_RADIUS, APP_BACKGROUND, new Color(164, 193, 205));
+        shell.setLayout(new BorderLayout());
+        shell.setBorder(BorderFactory.createEmptyBorder(0, 0, 8, 0));
+        shell.add(createTitleBar(), BorderLayout.NORTH);
+        shell.add(tabs, BorderLayout.CENTER);
+        setContentPane(shell);
+        addComponentListener(new ComponentAdapter() {
+            @Override
+            public void componentResized(ComponentEvent event) {
+                updateWindowShape();
+            }
+        });
+        updateWindowShape();
+    }
+
+    private JPanel createTitleBar() {
+        JPanel titleBar = new JPanel(new BorderLayout(8, 0));
+        titleBar.setOpaque(false);
+        titleBar.setBorder(BorderFactory.createEmptyBorder(7, 16, 3, 10));
+        titleBar.setPreferredSize(new java.awt.Dimension(0, 44));
+
+        javax.swing.JLabel title = new javax.swing.JLabel("点名助手");
+        styleTitle(title);
+        titleBar.add(title, BorderLayout.WEST);
+
+        JPanel actions = new JPanel(new FlowLayout(FlowLayout.RIGHT, 4, 0));
+        actions.setOpaque(false);
+        JButton minimize = windowButton("—", "最小化");
+        minimize.addActionListener(event -> setState(Frame.ICONIFIED));
+        JButton maximize = windowButton("□", "最大化/还原");
+        maximize.addActionListener(event -> toggleMaximize());
+        JButton close = windowButton("×", "关闭");
+        close.addActionListener(event -> dispatchEvent(new WindowEvent(this, WindowEvent.WINDOW_CLOSING)));
+        close.setForeground(new Color(158, 59, 72));
+        actions.add(minimize);
+        actions.add(maximize);
+        actions.add(close);
+        titleBar.add(actions, BorderLayout.EAST);
+        installWindowDrag(titleBar);
+        return titleBar;
+    }
+
+    private static JButton windowButton(String text, String tooltip) {
+        JButton button = button(text);
+        button.setToolTipText(tooltip);
+        button.setPreferredSize(new java.awt.Dimension(34, 28));
+        button.setBackground(APP_BACKGROUND);
+        button.setBorder(BorderFactory.createEmptyBorder());
+        button.setFont(button.getFont().deriveFont(Font.BOLD, 15f));
+        return button;
+    }
+
+    private void installWindowDrag(JPanel titleBar) {
+        MouseAdapter dragHandler = new MouseAdapter() {
+            private Point pressPoint;
+
+            @Override
+            public void mousePressed(MouseEvent event) {
+                if (event.getButton() == MouseEvent.BUTTON1 && !maximized) {
+                    pressPoint = event.getPoint();
+                }
+            }
+
+            @Override
+            public void mouseDragged(MouseEvent event) {
+                if (pressPoint == null || maximized) {
+                    return;
+                }
+                Point location = getLocation();
+                setLocation(location.x + event.getX() - pressPoint.x,
+                        location.y + event.getY() - pressPoint.y);
+            }
+
+            @Override
+            public void mouseReleased(MouseEvent event) {
+                pressPoint = null;
+            }
+
+            @Override
+            public void mouseClicked(MouseEvent event) {
+                if (event.getButton() == MouseEvent.BUTTON1 && event.getClickCount() == 2) {
+                    toggleMaximize();
+                }
+            }
+        };
+        titleBar.addMouseListener(dragHandler);
+        titleBar.addMouseMotionListener(dragHandler);
+    }
+
+    private void toggleMaximize() {
+        if (maximized) {
+            if (restoredBounds != null) {
+                setBounds(restoredBounds);
+            }
+            maximized = false;
+            updateWindowShape();
+            return;
+        }
+        restoredBounds = getBounds();
+        Rectangle workArea = getGraphicsConfiguration().getBounds();
+        java.awt.Insets insets = java.awt.Toolkit.getDefaultToolkit().getScreenInsets(getGraphicsConfiguration());
+        workArea = new Rectangle(workArea.x + insets.left, workArea.y + insets.top,
+                workArea.width - insets.left - insets.right, workArea.height - insets.top - insets.bottom);
+        setBounds(workArea);
+        maximized = true;
+        updateWindowShape();
+    }
+
+    private void updateWindowShape() {
+        if (getWidth() <= 0 || getHeight() <= 0) {
+            return;
+        }
+        try {
+            if (maximized) {
+                setShape(null);
+            } else {
+                setShape(new RoundRectangle2D.Double(0, 0, getWidth(), getHeight(), WINDOW_RADIUS, WINDOW_RADIUS));
+            }
+        } catch (UnsupportedOperationException | IllegalArgumentException ignored) {
+            // Shaped windows are unavailable on a few legacy desktop configurations.
+        }
     }
 
     private void loadWindowIcon() {
@@ -119,12 +263,33 @@ public final class MainFrame extends javax.swing.JFrame {
     private static JButton button(String text) {
         JButton button = new JButton(text);
         button.setFocusPainted(false);
+        button.setOpaque(true);
+        button.setForeground(TEXT_COLOR);
+        button.setBackground(SURFACE_BACKGROUND);
+        button.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(CONTROL_BORDER),
+                BorderFactory.createEmptyBorder(5, 11, 5, 11)));
         return button;
     }
 
     private static void styleTitle(javax.swing.JLabel label) {
         label.setFont(label.getFont().deriveFont(Font.BOLD, 18f));
-        label.setForeground(new Color(35, 69, 88));
+        label.setForeground(TEXT_COLOR);
+    }
+
+    private static void styleTextField(JTextField field) {
+        field.setOpaque(true);
+        field.setBackground(SURFACE_BACKGROUND);
+        field.setForeground(TEXT_COLOR);
+        field.setCaretColor(TEXT_COLOR);
+        field.setBorder(BorderFactory.createCompoundBorder(
+                BorderFactory.createLineBorder(CONTROL_BORDER),
+                BorderFactory.createEmptyBorder(5, 8, 5, 8)));
+    }
+
+    private static void styleToggle(javax.swing.AbstractButton toggle) {
+        toggle.setOpaque(false);
+        toggle.setForeground(TEXT_COLOR);
     }
 
     private final class ListsPanel extends JPanel {
@@ -132,10 +297,17 @@ public final class MainFrame extends javax.swing.JFrame {
         private final Runnable onChanged;
         private final DefaultListModel<NameList> listModel = new DefaultListModel<>();
         private final JList<NameList> listBox = new JList<>(listModel);
+        private final JPanel listArea = new JPanel(new CardLayout());
+        private final JScrollPane listScroll = new JScrollPane(listBox);
+        private final JLabel emptyListLabel = new JLabel(
+                "<html><center>还没有名单<br>点击“新建”或“导入文件”开始</center></html>",
+                JLabel.CENTER);
         private final JTextField remarkField = new JTextField();
         private final JCheckBox defaultCheck = new JCheckBox("设为默认抽取名单");
         private final DefaultListModel<Person> peopleModel = new DefaultListModel<>();
         private final JList<Person> peopleList = new JList<>(peopleModel);
+        private final JPanel peopleArea = new JPanel(new CardLayout());
+        private final JLabel emptyPeopleLabel = new JLabel("当前名单还没有成员", JLabel.CENTER);
         private final JTextField memberField = new JTextField();
         private final JLabel countLabel = new JLabel("共 0 人");
 
@@ -143,6 +315,7 @@ public final class MainFrame extends javax.swing.JFrame {
             super(new BorderLayout(12, 12));
             this.data = data;
             this.onChanged = onChanged;
+            setOpaque(false);
             setBorder(BorderFactory.createEmptyBorder(14, 14, 14, 14));
             build();
             refreshLists();
@@ -150,17 +323,25 @@ public final class MainFrame extends javax.swing.JFrame {
 
         private void build() {
             JPanel left = new JPanel(new BorderLayout(8, 8));
+            left.setOpaque(false);
             javax.swing.JLabel title = new javax.swing.JLabel("我的名单");
             styleTitle(title);
             left.add(title, BorderLayout.NORTH);
             listBox.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+            listBox.setBackground(SURFACE_BACKGROUND);
+            listBox.setForeground(TEXT_COLOR);
+            listBox.setSelectionBackground(SELECTION_BACKGROUND);
+            listBox.setSelectionForeground(TEXT_COLOR);
             listBox.setCellRenderer(new DefaultListCellRenderer() {
                 @Override
                 public java.awt.Component getListCellRendererComponent(JList<?> list, Object value, int index,
                                                                          boolean selected, boolean focused) {
-                    NameList nameList = (NameList) value;
+                    JList<?> target = list == null ? new JList<>() : list;
+                    if (!(value instanceof NameList nameList)) {
+                        return super.getListCellRendererComponent(target, "暂无名单，请先添加", index, selected, focused);
+                    }
                     String suffix = nameList.getId().equals(data.getDefaultListId()) ? "  · 默认" : "";
-                    return super.getListCellRendererComponent(list,
+                    return super.getListCellRendererComponent(target,
                             displayRemark(nameList) + " (" + nameList.getPeople().size() + ")" + suffix,
                             index, selected, focused);
                 }
@@ -170,8 +351,16 @@ public final class MainFrame extends javax.swing.JFrame {
                     showSelectedList();
                 }
             });
-            left.add(new JScrollPane(listBox), BorderLayout.CENTER);
+            listScroll.setBorder(BorderFactory.createLineBorder(CONTROL_BORDER));
+            listScroll.setOpaque(false);
+            listScroll.getViewport().setOpaque(false);
+            listArea.setOpaque(false);
+            emptyListLabel.setForeground(MUTED_TEXT_COLOR);
+            listArea.add(listScroll, "list");
+            listArea.add(emptyListLabel, "empty");
+            left.add(listArea, BorderLayout.CENTER);
             JPanel listButtons = new JPanel(new GridLayout(1, 3, 6, 0));
+            listButtons.setOpaque(false);
             JButton addButton = button("新建");
             addButton.addActionListener(event -> createList());
             JButton importButton = button("导入文件");
@@ -185,8 +374,13 @@ public final class MainFrame extends javax.swing.JFrame {
             left.setPreferredSize(new java.awt.Dimension(250, 0));
 
             JPanel details = new JPanel(new BorderLayout(8, 8));
+            details.setOpaque(false);
             JPanel heading = new JPanel(new BorderLayout(8, 0));
-            heading.add(new javax.swing.JLabel("名单详情"), BorderLayout.WEST);
+            heading.setOpaque(false);
+            javax.swing.JLabel detailsTitle = new javax.swing.JLabel("名单详情");
+            styleTitle(detailsTitle);
+            heading.add(detailsTitle, BorderLayout.WEST);
+            styleToggle(defaultCheck);
             defaultCheck.addActionListener(event -> {
                 NameList selected = selectedList();
                 if (selected != null && defaultCheck.isSelected()) {
@@ -199,6 +393,8 @@ public final class MainFrame extends javax.swing.JFrame {
             details.add(heading, BorderLayout.NORTH);
 
             JPanel editor = new JPanel(new BorderLayout(6, 0));
+            editor.setOpaque(false);
+            styleTextField(remarkField);
             editor.add(new javax.swing.JLabel("备注："), BorderLayout.WEST);
             editor.add(remarkField, BorderLayout.CENTER);
             JButton saveRemark = button("保存备注");
@@ -206,14 +402,22 @@ public final class MainFrame extends javax.swing.JFrame {
             editor.add(saveRemark, BorderLayout.EAST);
 
             JPanel memberHeader = new JPanel(new BorderLayout());
+            memberHeader.setOpaque(false);
             memberHeader.add(editor, BorderLayout.CENTER);
+            countLabel.setForeground(MUTED_TEXT_COLOR);
             memberHeader.add(countLabel, BorderLayout.SOUTH);
             peopleList.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
+            peopleList.setBackground(SURFACE_BACKGROUND);
+            peopleList.setForeground(TEXT_COLOR);
+            peopleList.setSelectionBackground(SELECTION_BACKGROUND);
+            peopleList.setSelectionForeground(TEXT_COLOR);
             peopleList.setCellRenderer(new DefaultListCellRenderer() {
                 @Override
                 public java.awt.Component getListCellRendererComponent(JList<?> list, Object value, int index,
                                                                          boolean selected, boolean focused) {
-                    Person person = (Person) value;
+                    if (!(value instanceof Person person)) {
+                        return new JLabel();
+                    }
                     NameChip chip = new NameChip(person.getId() + "  " + person.getName());
                     chip.setOpaque(false);
                     chip.setBackground(selected ? new Color(130, 190, 220, 100) : new Color(0, 0, 0, 0));
@@ -221,18 +425,27 @@ public final class MainFrame extends javax.swing.JFrame {
                 }
             });
             JScrollPane peopleScroll = new JScrollPane(peopleList);
-            peopleScroll.setBorder(BorderFactory.createEmptyBorder());
-            RoundedPanel peopleSurface = new RoundedPanel(16, new Color(247, 251, 253, 235), new Color(170, 198, 211, 180));
+            peopleScroll.setBorder(BorderFactory.createLineBorder(CONTROL_BORDER));
+            peopleScroll.setOpaque(false);
+            peopleScroll.getViewport().setOpaque(false);
+            peopleArea.setOpaque(false);
+            emptyPeopleLabel.setForeground(MUTED_TEXT_COLOR);
+            peopleArea.add(peopleScroll, "list");
+            peopleArea.add(emptyPeopleLabel, "empty");
+            RoundedPanel peopleSurface = new RoundedPanel(16, new Color(247, 251, 253), new Color(170, 198, 211));
             peopleSurface.setLayout(new BorderLayout());
-            peopleSurface.add(peopleScroll);
+            peopleSurface.add(peopleArea);
             peopleSurface.setPreferredSize(new java.awt.Dimension(0, 280));
 
             JPanel memberCenter = new JPanel(new BorderLayout(8, 8));
+            memberCenter.setOpaque(false);
             memberCenter.add(memberHeader, BorderLayout.NORTH);
             memberCenter.add(peopleSurface, BorderLayout.CENTER);
             details.add(memberCenter, BorderLayout.CENTER);
 
             JPanel memberActions = new JPanel(new BorderLayout(6, 0));
+            memberActions.setOpaque(false);
+            styleTextField(memberField);
             memberActions.add(memberField, BorderLayout.CENTER);
             memberField.getDocument().addDocumentListener(new DocumentListener() {
                 @Override public void insertUpdate(DocumentEvent event) { }
@@ -244,6 +457,7 @@ public final class MainFrame extends javax.swing.JFrame {
             JButton removeMember = button("移除选中");
             removeMember.addActionListener(event -> removeMembers());
             JPanel actionButtons = new JPanel(new FlowLayout(FlowLayout.RIGHT, 6, 0));
+            actionButtons.setOpaque(false);
             actionButtons.add(addMember);
             actionButtons.add(removeMember);
             memberActions.add(actionButtons, BorderLayout.EAST);
@@ -259,6 +473,7 @@ public final class MainFrame extends javax.swing.JFrame {
             for (NameList nameList : data.getLists()) {
                 listModel.addElement(nameList);
             }
+            showListArea();
             if (selectedId != null) {
                 selectById(selectedId);
             }
@@ -278,6 +493,7 @@ public final class MainFrame extends javax.swing.JFrame {
                 defaultCheck.setSelected(false);
                 peopleModel.clear();
                 countLabel.setText("共 0 人");
+                showPeopleArea(false);
                 return;
             }
             remarkField.setText(displayRemark(selected));
@@ -287,6 +503,17 @@ public final class MainFrame extends javax.swing.JFrame {
                 peopleModel.addElement(person);
             }
             countLabel.setText("共 " + selected.getPeople().size() + " 人");
+            showPeopleArea(!peopleModel.isEmpty());
+        }
+
+        private void showListArea() {
+            CardLayout layout = (CardLayout) listArea.getLayout();
+            layout.show(listArea, listModel.isEmpty() ? "empty" : "list");
+        }
+
+        private void showPeopleArea(boolean hasPeople) {
+            CardLayout layout = (CardLayout) peopleArea.getLayout();
+            layout.show(peopleArea, hasPeople ? "list" : "empty");
         }
 
         private NameList selectedList() {
@@ -450,18 +677,23 @@ public final class MainFrame extends javax.swing.JFrame {
         private final JLabel groupLabel = new JLabel("组数");
         private final JLabel counterLabel = new JLabel("已抽 0 人 · 未抽 0 人 · 总人数 0");
         private final JPanel resultPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 10));
-        private final RoundedPanel resultSurface = new RoundedPanel(16, new Color(247, 251, 253, 235), new Color(170, 198, 211, 180));
+        private final JPanel resultArea = new JPanel(new CardLayout());
+        private final JScrollPane resultScroll = new JScrollPane(resultPanel);
+        private final JLabel emptyResultLabel = new JLabel("抽取结果会显示在这里", JLabel.CENTER);
+        private final RoundedPanel resultSurface = new RoundedPanel(16, new Color(247, 251, 253), new Color(170, 198, 211));
 
         private DrawPanel(NameListRepository.Snapshot data) {
             super(new BorderLayout(12, 12));
             this.data = data;
+            setOpaque(false);
             setBorder(BorderFactory.createEmptyBorder(14, 14, 14, 14));
             build();
             refreshLists();
         }
 
         private void build() {
-            JPanel top = new JPanel(new GridBagLayout());
+            RoundedPanel top = new RoundedPanel(16, new Color(255, 255, 255), new Color(170, 198, 211));
+            top.setLayout(new GridBagLayout());
             GridBagConstraints constraints = new GridBagConstraints();
             constraints.insets = new Insets(4, 5, 4, 5);
             constraints.anchor = GridBagConstraints.WEST;
@@ -475,11 +707,17 @@ public final class MainFrame extends javax.swing.JFrame {
                 @Override
                 public java.awt.Component getListCellRendererComponent(JList<?> list, Object value, int index,
                                                                          boolean selected, boolean focused) {
-                    NameList nameList = (NameList) value;
-                    return super.getListCellRendererComponent(list,
+                    JList<?> target = list == null ? new JList<>() : list;
+                    if (!(value instanceof NameList nameList)) {
+                        return super.getListCellRendererComponent(target, "暂无名单，请先添加", index, selected, focused);
+                    }
+                    return super.getListCellRendererComponent(target,
                             nameList.getRemark() + " (" + nameList.getPeople().size() + " 人)", index, selected, focused);
                 }
             });
+            listCombo.setOpaque(true);
+            listCombo.setBackground(SURFACE_BACKGROUND);
+            listCombo.setForeground(TEXT_COLOR);
             listCombo.addActionListener(event -> {
                 drawnIds.clear();
                 clearResults();
@@ -491,6 +729,7 @@ public final class MainFrame extends javax.swing.JFrame {
             top.add(new javax.swing.JLabel("模式"), constraints);
             constraints.gridx++;
             JPanel modes = new JPanel(new FlowLayout(FlowLayout.LEFT, 0, 0));
+            modes.setOpaque(false);
             ButtonGroup modeGroup = new ButtonGroup();
             modeGroup.add(singleMode);
             modeGroup.add(multipleMode);
@@ -499,6 +738,12 @@ public final class MainFrame extends javax.swing.JFrame {
             top.add(modes, constraints);
             constraints.gridx++;
             top.add(continuousCheck, constraints);
+
+            styleToggle(singleMode);
+            styleToggle(multipleMode);
+            styleToggle(continuousCheck);
+            perGroupLabel.setForeground(TEXT_COLOR);
+            groupLabel.setForeground(TEXT_COLOR);
 
             constraints.gridy = 1;
             constraints.gridx = 0;
@@ -537,12 +782,25 @@ public final class MainFrame extends javax.swing.JFrame {
             add(top, BorderLayout.NORTH);
 
             resultSurface.setLayout(new BorderLayout());
-            resultSurface.add(new JScrollPane(resultPanel), BorderLayout.CENTER);
+            resultPanel.setOpaque(false);
+            resultScroll.setBorder(BorderFactory.createEmptyBorder());
+            resultScroll.setOpaque(false);
+            resultScroll.getViewport().setOpaque(false);
+            resultArea.setOpaque(false);
+            emptyResultLabel.setForeground(MUTED_TEXT_COLOR);
+            resultArea.add(resultScroll, "results");
+            resultArea.add(emptyResultLabel, "empty");
+            resultSurface.add(resultArea, BorderLayout.CENTER);
             add(resultSurface, BorderLayout.CENTER);
             JPanel bottom = new JPanel(new BorderLayout());
+            bottom.setOpaque(false);
+            counterLabel.setForeground(TEXT_COLOR);
             bottom.add(counterLabel, BorderLayout.WEST);
-            bottom.add(new javax.swing.JLabel("连续模式关闭时，每次抽取可重复。"), BorderLayout.EAST);
+            javax.swing.JLabel hint = new javax.swing.JLabel("连续模式关闭时，每次抽取可重复。");
+            hint.setForeground(MUTED_TEXT_COLOR);
+            bottom.add(hint, BorderLayout.EAST);
             add(bottom, BorderLayout.SOUTH);
+            clearResults();
             updateModeControls();
         }
 
@@ -612,6 +870,7 @@ public final class MainFrame extends javax.swing.JFrame {
                     resultPanel.add(new NameChip(person.getName()));
                 }
             }
+            showResultArea(resultPanel.getComponentCount() > 0);
             resultPanel.revalidate();
             resultPanel.repaint();
         }
@@ -627,6 +886,7 @@ public final class MainFrame extends javax.swing.JFrame {
                 }
                 resultPanel.add(groupPanel);
             }
+            showResultArea(resultPanel.getComponentCount() > 0);
             resultPanel.revalidate();
             resultPanel.repaint();
         }
@@ -637,8 +897,14 @@ public final class MainFrame extends javax.swing.JFrame {
 
         private void clearResults() {
             resultPanel.removeAll();
+            showResultArea(false);
             resultPanel.revalidate();
             resultPanel.repaint();
+        }
+
+        private void showResultArea(boolean hasResults) {
+            CardLayout layout = (CardLayout) resultArea.getLayout();
+            layout.show(resultArea, hasResults ? "results" : "empty");
         }
 
         private void updateCounter() {
@@ -656,6 +922,7 @@ public final class MainFrame extends javax.swing.JFrame {
     private static final class AboutPanel extends JPanel {
         private AboutPanel() {
             super(new BorderLayout(14, 14));
+            setOpaque(false);
             setBorder(BorderFactory.createEmptyBorder(18, 22, 18, 22));
             javax.swing.JLabel title = new javax.swing.JLabel("点名助手");
             styleTitle(title);
@@ -666,6 +933,9 @@ public final class MainFrame extends javax.swing.JFrame {
             help.setLineWrap(true);
             help.setWrapStyleWord(true);
             help.setFont(UIManager.getFont("Label.font"));
+            help.setForeground(TEXT_COLOR);
+            help.setBackground(SURFACE_BACKGROUND);
+            help.setBorder(BorderFactory.createEmptyBorder(12, 14, 12, 14));
             help.setText("使用说明\n\n"
                     + "1. 在“名单管理”中新建名单或一次选择多个文件导入。导入时可以填写备注；留空会自动使用“名单一、名单二……”命名。\n"
                     + "2. 手动添加姓名时，可以使用全角/半角引号和分号等分隔符，例如：\"张三\"\"李四\"、“张三”；“李四”。\n"
@@ -676,9 +946,14 @@ public final class MainFrame extends javax.swing.JFrame {
                     + "纯文本：\n1,张三\n2,李四\n3,王五\n\n"
                     + "JSON：\n[{\"id\":1,\"name\":\"张三\"},{\"name\":\"李四\"}]\n\n"
                     + "本项目以 GNU GPL v3.0 协议发布。名单数据保存在用户目录下的 .rollcall/lists.json。\n");
-            add(new JScrollPane(help), BorderLayout.CENTER);
+            JScrollPane helpScroll = new JScrollPane(help);
+            helpScroll.setBorder(BorderFactory.createLineBorder(CONTROL_BORDER));
+            helpScroll.setOpaque(false);
+            helpScroll.getViewport().setOpaque(false);
+            add(helpScroll, BorderLayout.CENTER);
 
             JPanel links = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 0));
+            links.setOpaque(false);
             links.add(new javax.swing.JLabel("作者：Dai2010"));
             JButton author = button("作者 GitHub");
             author.addActionListener(event -> openUrl("https://github.com/Dai2010"));

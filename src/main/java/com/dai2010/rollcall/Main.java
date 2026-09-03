@@ -2,6 +2,7 @@ package com.dai2010.rollcall;
 
 import com.dai2010.rollcall.ui.MainFrame;
 
+import javax.swing.JOptionPane;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
 
@@ -16,8 +17,16 @@ public final class Main {
             } catch (Exception ignored) {
                 // The cross-platform Swing look and feel remains available.
             }
-            MainFrame frame = new MainFrame();
-            frame.setVisible(true);
+            try {
+                MainFrame frame = new MainFrame();
+                frame.setVisible(true);
+            } catch (RuntimeException error) {
+                error.printStackTrace();
+                JOptionPane.showMessageDialog(null,
+                        "点名助手启动失败：" + (error.getMessage() == null
+                                ? error.getClass().getSimpleName() : error.getMessage()),
+                        "启动失败", JOptionPane.ERROR_MESSAGE);
+            }
         });
     }
 }

@@ -57,7 +57,7 @@ mvn package
 java -jar target/rollcall.jar
 ```
 
-所有发布构建由 GitHub Actions 执行。`Release` workflow 在 Windows runner 上使用 `jpackage` 生成 EXE 和 MSI；手动运行时填写版本标签（例如 `v0.0.1`）。
+所有发布构建由 GitHub Actions 执行。`Release` workflow 在 Windows runner 上使用 `jpackage` 生成 EXE 和 MSI；手动运行时填写版本标签（例如 `v0.0.2`）。
 
 ## 许可证
 

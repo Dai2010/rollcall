@@ -31,6 +31,7 @@ public class RoundedPanel extends JPanel {
 
     @Override
     protected void paintComponent(Graphics graphics) {
+        super.paintComponent(graphics);
         Graphics2D g = (Graphics2D) graphics.create();
         g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
         int width = getWidth() - 1;
@@ -42,6 +43,5 @@ public class RoundedPanel extends JPanel {
             g.drawRoundRect(0, 0, width, height, radius, radius);
         }
         g.dispose();
-        super.paintComponent(graphics);
     }
 }
