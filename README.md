@@ -12,6 +12,8 @@
 - 单人模式和多人分组模式。多人模式可设置每组人数及组数，组数默认一组。
 - 连续抽人模式记录已抽成员；剩余人数不足以完成下一组时会提示并保持当前状态。
 - 名单数据显示为统一的浅蓝色圆角标签，并置于可滚动区域。
+- 每次启动都会在后台检查 GitHub 最新正式版本，并显示当前版本、最新版本和更新说明。
+- Windows 用户可以通过 `ghfast.top` 代理下载安装包；程序校验 GitHub 提供的 SHA-256 后才会启动安装器。
 
 ## 名单文件格式
 
@@ -57,7 +59,7 @@ mvn package
 java -jar target/rollcall.jar
 ```
 
-所有发布构建由 GitHub Actions 执行。`Release` workflow 在 Windows runner 上使用 `jpackage` 生成 EXE 和 MSI；手动运行时填写版本标签（例如 `v0.0.2`）。
+所有发布构建由 GitHub Actions 执行。`Release` workflow 在 Windows runner 上使用 `jpackage` 生成 EXE 和 MSI；手动运行时填写版本标签（例如 `v0.0.3`）。
 
 ## 许可证
 

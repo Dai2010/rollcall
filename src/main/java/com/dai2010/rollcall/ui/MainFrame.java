@@ -1,10 +1,13 @@
 package com.dai2010.rollcall.ui;
 
+import com.dai2010.rollcall.AppVersion;
 import com.dai2010.rollcall.data.NameListRepository;
 import com.dai2010.rollcall.model.NameList;
 import com.dai2010.rollcall.model.Person;
 import com.dai2010.rollcall.service.DrawService;
 import com.dai2010.rollcall.service.NameParser;
+import com.dai2010.rollcall.service.UpdateInstaller;
+import com.dai2010.rollcall.service.UpdateService;
 
 import javax.swing.BorderFactory;
 import javax.swing.ButtonGroup;
@@ -74,6 +77,7 @@ public final class MainFrame extends javax.swing.JFrame {
     private final NameListRepository.Snapshot snapshot;
     private final ListsPanel listsPanel;
     private final DrawPanel drawPanel;
+    private final UpdatePanel updatePanel;
     private Rectangle restoredBounds;
     private boolean maximized;
 
@@ -104,6 +108,7 @@ public final class MainFrame extends javax.swing.JFrame {
 
         this.drawPanel = new DrawPanel(snapshot);
         this.listsPanel = new ListsPanel(snapshot, this::saveAndRefresh);
+        this.updatePanel = new UpdatePanel(new UpdateService(), new UpdateInstaller(), AppVersion.current());
         JTabbedPane tabs = new JTabbedPane();
         tabs.setOpaque(false);
         tabs.setBackground(APP_BACKGROUND);
@@ -111,6 +116,7 @@ public final class MainFrame extends javax.swing.JFrame {
         tabs.setTabLayoutPolicy(JTabbedPane.SCROLL_TAB_LAYOUT);
         tabs.addTab("抽人与分组", drawPanel);
         tabs.addTab("名单管理", listsPanel);
+        tabs.addTab("检查更新", updatePanel);
         tabs.addTab("关于与帮助", new AboutPanel());
         RoundedPanel shell = new RoundedPanel(WINDOW_RADIUS, APP_BACKGROUND, new Color(164, 193, 205));
         shell.setLayout(new BorderLayout());
@@ -125,6 +131,10 @@ public final class MainFrame extends javax.swing.JFrame {
             }
         });
         updateWindowShape();
+    }
+
+    public void startAutomaticUpdateCheck() {
+        updatePanel.startAutomaticCheck();
     }
 
     private JPanel createTitleBar() {

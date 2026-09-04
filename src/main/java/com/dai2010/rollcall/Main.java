@@ -20,6 +20,7 @@ public final class Main {
             try {
                 MainFrame frame = new MainFrame();
                 frame.setVisible(true);
+                frame.startAutomaticUpdateCheck();
             } catch (RuntimeException error) {
                 error.printStackTrace();
                 JOptionPane.showMessageDialog(null,

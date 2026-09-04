@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: 'Release tag, for example v0.0.2'
+        description: 'Release tag, for example v0.0.3'
         required: true
         type: string
   push:
@@ -41,4 +41,6 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
+          name: '点名助手 ${{ github.ref_name }}'
+          body_path: RELEASE_NOTES.md
           files: packaging/windows/dist/*

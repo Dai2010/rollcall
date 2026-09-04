@@ -6,7 +6,7 @@
 
     <groupId>com.dai2010</groupId>
     <artifactId>rollcall</artifactId>
-    <version>0.0.2</version>
+    <version>0.0.3</version>
     <name>RollCall</name>
     <description>Java desktop roll-call tool with list management and random drawing.</description>
     <url>https://github.com/Dai2010/rollcall</url>
@@ -41,6 +41,19 @@
                 <version>3.13.0</version>
                 <configuration>
                     <release>${maven.compiler.release}</release>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.4.2</version>
+                <configuration>
+                    <archive>
+                        <manifestEntries>
+                            <Implementation-Title>RollCall</Implementation-Title>
+                            <Implementation-Version>${project.version}</Implementation-Version>
+                        </manifestEntries>
+                    </archive>
                 </configuration>
             </plugin>
             <plugin>
