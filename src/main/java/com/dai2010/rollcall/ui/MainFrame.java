@@ -686,9 +686,9 @@ public final class MainFrame extends javax.swing.JFrame {
         private final JLabel perGroupLabel = new JLabel("每组人数");
         private final JLabel groupLabel = new JLabel("组数");
         private final JLabel counterLabel = new JLabel("已抽 0 人 · 未抽 0 人 · 总人数 0");
-        private final JPanel resultPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 10, 10));
+        private final ResultsPanel resultPanel = new ResultsPanel();
         private final JPanel resultArea = new JPanel(new CardLayout());
-        private final JScrollPane resultScroll = new JScrollPane(resultPanel);
+        private final JScrollPane resultScroll = resultPanel.createScrollPane();
         private final JLabel emptyResultLabel = new JLabel("抽取结果会显示在这里", JLabel.CENTER);
         private final RoundedPanel resultSurface = new RoundedPanel(16, new Color(247, 251, 253), new Color(170, 198, 211));
 
@@ -875,30 +875,39 @@ public final class MainFrame extends javax.swing.JFrame {
 
         private void renderPeople(List<List<Person>> groups) {
             resultPanel.removeAll();
-            for (List<Person> group : groups) {
-                for (Person person : group) {
-                    resultPanel.add(new NameChip(person.getName()));
-                }
-            }
+            List<String> names = groups.stream()
+                    .flatMap(List::stream)
+                    .map(Person::getName)
+                    .toList();
+            resultPanel.add(new GroupResultPanel(null, names));
             showResultArea(resultPanel.getComponentCount() > 0);
-            resultPanel.revalidate();
-            resultPanel.repaint();
+            refreshResults();
         }
 
         private void renderGroups(List<List<Person>> groups) {
             resultPanel.removeAll();
+            List<GroupResultPanel> groupPanels = new java.util.ArrayList<>();
             for (int index = 0; index < groups.size(); index++) {
-                JPanel groupPanel = new JPanel(new FlowLayout(FlowLayout.LEFT, 8, 4));
-                groupPanel.setOpaque(false);
-                groupPanel.add(new javax.swing.JLabel("第 " + (index + 1) + " 组"));
-                for (Person person : groups.get(index)) {
-                    groupPanel.add(new NameChip(person.getName()));
-                }
+                List<String> names = groups.get(index).stream().map(Person::getName).toList();
+                GroupResultPanel groupPanel = new GroupResultPanel("第 " + (index + 1) + " 组", names);
+                groupPanels.add(groupPanel);
+            }
+            int labelColumnWidth = groupPanels.stream()
+                    .mapToInt(GroupResultPanel::naturalLabelWidth)
+                    .max()
+                    .orElse(0);
+            for (GroupResultPanel groupPanel : groupPanels) {
+                groupPanel.setLabelColumnWidth(labelColumnWidth);
                 resultPanel.add(groupPanel);
             }
             showResultArea(resultPanel.getComponentCount() > 0);
+            refreshResults();
+        }
+
+        private void refreshResults() {
             resultPanel.revalidate();
             resultPanel.repaint();
+            SwingUtilities.invokeLater(() -> resultScroll.getVerticalScrollBar().setValue(0));
         }
 
         private NameList selectedList() {
